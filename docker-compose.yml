@@ -1,0 +1,202 @@
+version: '3.3'
+
+
+services:
+
+#MICROSERVICE MANAGERS
+
+ eureka:
+  build: ./eureka-server
+  restart: always
+  network_mode: 'host'
+  ports:
+    - "8761:8761"
+
+ config:
+  build: ./config-server
+  restart: always
+  network_mode: 'host'
+  ports:
+    - "8888:8888"
+
+#MESSAGING
+
+ zookeeper:
+  image: wurstmeister/zookeeper
+  network_mode: "host"
+  restart: always
+  ports:
+    - "2181:2181"
+
+ kafka:
+  image: wurstmeister/kafka
+  ports:
+    - "9092"
+  restart: always
+  network_mode: "host"
+  depends_on:
+    - zookeeper
+  environment:
+    KAFKA_ADVERTISED_HOST_NAME: localhost
+    KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+    KAFKA_ADVERTISED_PORT: 9092
+
+
+
+# # DATABASES
+
+ mongo:
+  image: mongo:latest
+  restart: always
+  network_mode: 'host'
+  volumes:
+    - /data/mongo:/data/db
+  ports:
+    - "27017:27017"
+
+ neo4j:
+  image: neo4j:latest
+  hostname: neo4j
+  restart: always
+  container_name: neo4j
+  network_mode: "host"
+  volumes:
+    - /data/neo4j:/data
+  ports:
+    - "7474:7474"
+    - "7687:7687"
+  environment:
+    NEO4J_AUTH: neo4j/root
+    NEO4J_dbms_logs_debug_level: DEBUG
+
+
+# BACKEND MICROSERVICES
+ ticketservice:
+  build: ./ticket-service
+  restart: always
+  network_mode: 'host'
+  depends_on:
+    - eureka
+    - mongo
+    - kafka
+
+ csrservice:
+  build: ./client-service-representative
+  network_mode: 'host'
+  restart: always
+  depends_on:
+    - eureka
+    - mongo
+    - kafka
+
+ botservice:
+  build: ./bot-service
+  network_mode: 'host'
+  restart: always
+  depends_on:
+    - eureka
+    - neo4j
+    - kafka
+
+ verification:
+  build: ./verification
+  restart: always
+  network_mode: 'host'
+  depends_on:
+    - mongo
+
+ reportservice:
+  build: ./report-service
+  restart: always
+  network_mode: 'host'
+  depends_on:
+    - eureka
+    - mongo
+    - kafka
+
+ cdpattern:
+  build: ./cdpattern-service
+  restart: always
+  network_mode: 'host'
+  depends_on:
+    - eureka
+
+
+ commandregistry:
+  build: ./command-registry
+  restart: always
+  network_mode: 'host'
+  depends_on:
+    - eureka
+    - mongo
+
+
+
+# FRONT END UIs
+ user-ui:
+  build: ./angular-ui/user-ui
+  restart: always
+  network_mode: "host"
+
+ csr-ui:
+  build: ./angular-ui/csr-ui
+  restart: always
+  network_mode: "host"
+
+ dev-ui:
+  build: ./angular-ui/dev-ui
+  restart: always
+  network_mode: "host"
+
+ admin-ui:
+  build: ./angular-ui/admin-ui
+  restart: always
+  network_mode: "host"
+
+ prometheus:
+  image: prom/prometheus:latest
+  volumes:
+    - ./prometheus/:/etc/prometheus/
+  command:
+    - '--config.file=/etc/prometheus/prometheus.yml'
+    - '--storage.tsdb.path=/prometheus'
+    - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+    - '--web.console.templates=/usr/share/prometheus/consoles'
+
+  network_mode: "host"
+  restart: always
+
+
+ alertmanager:
+  image: prom/alertmanager
+  volumes:
+    - ./alertmanager/:/etc/alertmanager/
+  network_mode: "host"
+  restart: always
+  command:
+    - '--config.file=/etc/alertmanager/config.yml'
+    - '--storage.path=/alertmanager'
+
+ grafana:
+  image: grafana/grafana:latest
+  user: "1000"
+  ports:
+    - "3000:3000"
+  
+  depends_on:
+    - prometheus
+  # volumes:
+  #   # - ../grafana_data:/var/lib/grafana
+  #   # - ./grafana/provisioning/:/etc/grafana/provisioning/
+  env_file:
+    - ./grafana/config.monitoring
+  # network_mode : "host"  
+  restart: always
+   
+
+
+
+
+
+
+
